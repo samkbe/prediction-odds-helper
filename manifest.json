@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Prediction Odds Helper",
+  "version": "1.0.0",
+  "description": "Append sportsbook-style odds next to prediction market prices (Decimal, American, Fractional) with optional fee adjustment.",
+  "icons": {},
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.polymarket.com/*",
+        "https://*.kalshi.com/*",
+        "https://*.myriad.markets/*",
+        "https://kalshi.com/*",
+        "https://polymarket.com/*",
+        "https://myriad.markets/*"
+      ],
+      "js": ["content.js"],
+      "css": ["style.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": [
+    "https://*.polymarket.com/*",
+    "https://*.kalshi.com/*",
+    "https://*.myriad.markets/*",
+    "https://kalshi.com/*",
+    "https://polymarket.com/*",
+    "https://myriad.markets/*"
+  ]
+}
