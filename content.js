@@ -3,11 +3,9 @@
 const SETTINGS_KEY = "__prediction_odds_helper_settings__";
 const defaultSettings = {
   showDecimal: true,
-  showAmerican: true,
+  showAmerican: false,
   showFractional: false,
-  // If your market charges a fee at buy time, you can model “effective p”
-  // as p' = p + feeAdj (for YES) or tweak however you prefer.
-  // Enter as percentage points (e.g., 3 => +3pp => 0.55 becomes 0.58).
+  feeModel: false, // false | "kalshi" | "polymarket"
   feeAdjustmentPp: 0,
 };
 
@@ -117,10 +115,20 @@ function extractProbFromText(t) {
   return NaN;
 }
 
+function applyFeeModel(p, settings) {
+  if (settings.feeModel === "kalshi") {
+    return clamp01(p + 0.07 * (1 - p));
+  } else if (settings.feeModel === "polymarket") {
+    return clamp01(p);
+  } else {
+    return clamp01(p + (settings.feeAdjustmentPp || 0) / 100);
+  }
+}
+
 // === Badge creation ==========================================================
 
 function createBadge(p, settings) {
-  const effectiveP = clamp01(p + settings.feeAdjustmentPp / 100);
+  const effectiveP = applyFeeModel(p, settings);
   const container = document.createElement("span");
   container.className = "odds-badge";
   container.title =
@@ -240,6 +248,14 @@ function mountSettings(settings) {
 
   const wrap = document.createElement("div");
   wrap.id = "odds-helper-settings";
+
+  const currentFeeChoice =
+    settings.feeModel === "kalshi"
+      ? "kalshi"
+      : settings.feeModel === "polymarket"
+      ? "polymarket"
+      : "none";
+
   wrap.innerHTML = `
     <button id="odds-helper-toggle" class="oh-btn" title="Prediction Odds Helper settings">Odds</button>
     <div id="odds-helper-panel" class="oh-panel" hidden>
@@ -252,19 +268,60 @@ function mountSettings(settings) {
       <label><input type="checkbox" id="oh-frac" ${
         settings.showFractional ? "checked" : ""
       }/> Fractional</label>
-      <label>Fee adj (pp): <input type="number" id="oh-fee" min="-10" max="10" step="0.1" value="${
-        settings.feeAdjustmentPp
-      }"/></label>
+
+      <fieldset class="oh-fieldset">
+        <legend class="oh-legend">Fee model</legend>
+        <label><input type="radio" name="oh-feemodel" value="kalshi" ${
+          currentFeeChoice === "kalshi" ? "checked" : ""
+        }/> Kalshi</label>
+        <label><input type="radio" name="oh-feemodel" value="polymarket" ${
+          currentFeeChoice === "polymarket" ? "checked" : ""
+        }/> Polymarket</label>
+        <label><input type="radio" name="oh-feemodel" value="none" ${
+          currentFeeChoice === "none" ? "checked" : ""
+        }/> None (Use custom % below)</label>
+      </fieldset>
+
+      <label>
+        Fee adj (pp):
+        <input type="number" id="oh-fee" min="-10" max="10" step="0.1" value="${
+          settings.feeAdjustmentPp
+        }"/>
+      </label>
+
       <div class="oh-row">
         <button id="oh-apply" class="oh-btn">Apply</button>
         <button id="oh-close" class="oh-btn">Close</button>
       </div>
-      <div class="oh-hint">Tip: Fee adjustment adds/subtracts percentage points to implied p before converting.</div>
+      <div class="oh-hint">
+        • Kalshi applies 0.07 × (1 - p).<br/>
+        • Polymarket uses no fee.<br/>
+        • “None” lets you add/subtract percentage points manually (e.g., 3 → +0.03 to p).
+      </div>
     </div>
   `;
   document.body.appendChild(wrap);
 
   const panel = document.getElementById("odds-helper-panel");
+  const feeInput = document.getElementById("oh-fee");
+
+  // Enable/disable fee input depending on radio
+  const updateFeeInputEnabled = () => {
+    const choice =
+      document.querySelector('input[name="oh-feemodel"]:checked')?.value ||
+      "none";
+    const isManual = choice === "none";
+    feeInput.disabled = !isManual;
+    feeInput.style.opacity = isManual ? "1" : "0.6";
+  };
+
+  document
+    .getElementsByName("oh-feemodel")
+    .forEach((r) => r.addEventListener("change", updateFeeInputEnabled));
+
+  // Initial state
+  updateFeeInputEnabled();
+
   document
     .getElementById("odds-helper-toggle")
     .addEventListener("click", () => {
@@ -273,20 +330,26 @@ function mountSettings(settings) {
   document.getElementById("oh-close").addEventListener("click", () => {
     panel.hidden = true;
   });
+
   document.getElementById("oh-apply").addEventListener("click", () => {
+    const feeChoice =
+      document.querySelector('input[name="oh-feemodel"]:checked')?.value ||
+      "none";
+    const feeModel = feeChoice === "none" ? false : feeChoice;
+
     const s = {
       showDecimal: document.getElementById("oh-dec").checked,
       showAmerican: document.getElementById("oh-ame").checked,
       showFractional: document.getElementById("oh-frac").checked,
+      feeModel,
       feeAdjustmentPp: parseFloat(
         document.getElementById("oh-fee").value || "0"
       ),
     };
     saveSettings(s);
-    // Re-scan and refresh badges: easiest is to remove old badges and rescan.
-    document
-      .querySelectorAll(`[${BADGE_ATTR}="1"] .odds-badge`)
-      .forEach((el) => el.remove());
+
+    // Wipe old badges + host flags, then rescan with new settings
+    document.querySelectorAll(".odds-badge").forEach((el) => el.remove());
     document
       .querySelectorAll(`[${BADGE_ATTR}="1"]`)
       .forEach((el) => el.removeAttribute(BADGE_ATTR));
@@ -301,3 +364,8 @@ function mountSettings(settings) {
   mountSettings(settings);
   startObservers(settings);
 })();
+
+//Kalshi
+//7%×(1−P)​
+
+//Polymarket
