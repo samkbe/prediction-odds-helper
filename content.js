@@ -9,6 +9,14 @@ const defaultSettings = {
   feeAdjustmentPp: 0,
 };
 
+let currentSettings = loadSettings();
+
+function updateSettings(patchOrAll) {
+  const patch = patchOrAll;
+  Object.assign(currentSettings, patch);
+  saveSettings(currentSettings);
+}
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -62,8 +70,6 @@ function fmtAmerican(a) {
 }
 
 // === Detection of prices on each site =======================================
-
-const BADGE_ATTR = "data-odds-badge-attached";
 
 function isLikelyPriceText(t) {
   if (!t) return false;
@@ -123,14 +129,20 @@ function applyFeeModel(p, settings) {
 
 // === Badge creation ==========================================================
 
-function createBadge(p, settings) {
+const BADGE_ATTR = "data-odds-badge-attached";
+const OUR_ROOT_SELECTOR = ".odds-badge, #odds-helper-settings";
+
+function renderBadge(el, p, settings) {
   const effectiveP = applyFeeModel(p, settings);
-  const container = document.createElement("span");
-  container.className = "odds-badge";
-  container.title =
+  el.className = "odds-badge";
+  el.title =
     `Implied from p=${(effectiveP * 100).toFixed(2)}%` +
-    (settings.feeAdjustmentPp
-      ? ` (fee adj: ${settings.feeAdjustmentPp}pp)`
+    (settings.feeModel === "kalshi"
+      ? " (Kalshi fees)"
+      : settings.feeModel === "polymarket"
+      ? " (Polymarket: no fee)"
+      : settings.feeAdjustmentPp
+      ? ` (manual: ${settings.feeAdjustmentPp}pp)`
       : "");
 
   const bits = [];
@@ -140,44 +152,41 @@ function createBadge(p, settings) {
     bits.push(`US ${fmtAmerican(probToAmerican(effectiveP))}`);
   if (settings.showFractional)
     bits.push(`Frac ${probToFractional(effectiveP)}`);
-  container.textContent = ` ${bits.join(" · ")}`;
-  return container;
+  el.textContent = ` ${bits.join(" · ")}`;
+}
+
+function createBadge(p, settings) {
+  const span = document.createElement("span");
+  renderBadge(span, p, settings);
+  return span;
 }
 
 function attachBadge(targetNode, p, settings) {
-  // Resolve the element we’ll hang our badge and attribute on
   const hostEl =
     targetNode.nodeType === Node.TEXT_NODE
       ? targetNode.parentElement
       : targetNode;
   if (!hostEl) return;
 
-  // Avoid double-attaching on the same host element
-  if (hostEl.getAttribute(BADGE_ATTR) === "1") return;
+  // If we're inside our own UI/badge, do nothing
+  if (hostEl.closest(OUR_ROOT_SELECTOR)) return;
 
-  const badge = createBadge(p, settings);
+  // Find an existing direct child badge
+  let badge = hostEl.querySelector?.(":scope > .odds-badge");
 
-  // If we matched a text node, insert the badge right after that text,
-  // otherwise append to the element.
-  if (targetNode.nodeType === Node.TEXT_NODE && targetNode.parentNode) {
-    // If the *immediate* next sibling is already a badge, skip (prevents dupes on fast re-scans)
-    const next = targetNode.nextSibling;
-    if (
-      next &&
-      next.nodeType === Node.ELEMENT_NODE &&
-      next.classList.contains("odds-badge")
-    ) {
-      return;
-    }
-    targetNode.parentNode.insertBefore(badge, targetNode.nextSibling);
+  if (badge) {
+    // Update in place (no replace)
+    renderBadge(badge, p, settings);
   } else {
-    // If last child is already our badge, skip
-    const last = hostEl.lastElementChild;
-    if (last && last.classList.contains("odds-badge")) return;
-    hostEl.insertAdjacentElement("beforeend", badge);
+    // Insert new badge right after the text node or at end of element
+    badge = createBadge(p, settings);
+    if (targetNode.nodeType === Node.TEXT_NODE && targetNode.parentNode) {
+      targetNode.parentNode.insertBefore(badge, targetNode.nextSibling);
+    } else {
+      hostEl.insertAdjacentElement("beforeend", badge);
+    }
+    hostEl.setAttribute(BADGE_ATTR, "1");
   }
-
-  hostEl.setAttribute(BADGE_ATTR, "1");
 }
 
 // Walk nodes and find likely price texts
@@ -190,7 +199,11 @@ function scanOnce(settings) {
 
   while (walker.nextNode()) {
     const n = walker.currentNode;
-    // Only examine text nodes or small texty elements
+
+    // Skip anything inside our badges/settings UI
+    const parentEl = n.nodeType === Node.TEXT_NODE ? n.parentElement : n;
+    if (parentEl && parentEl.closest(OUR_ROOT_SELECTOR)) continue;
+
     if (n.nodeType === Node.TEXT_NODE) {
       const t = n.nodeValue;
       if (isLikelyPriceText(t)) {
@@ -201,14 +214,7 @@ function scanOnce(settings) {
       if (seen.has(n)) continue;
       seen.add(n);
 
-      // Skip nodes we injected
-      if (
-        n.classList?.contains("odds-badge") ||
-        n.id === "odds-helper-settings"
-      )
-        continue;
-
-      // Check elements with short text (avoid huge chunks)
+      // Only simple elements (single text node)
       const text =
         n.childNodes?.length === 1 && n.firstChild?.nodeType === Node.TEXT_NODE
           ? n.textContent
@@ -221,17 +227,46 @@ function scanOnce(settings) {
   }
 }
 
-// Observe SPA updates
+let PATCHING = 0; // reentrancy guard
+
 function startObservers(settings) {
+  let timer = 0;
+
   const obs = new MutationObserver((mutations) => {
-    queueMicrotask(() => scanOnce(settings));
+    // If all mutations are within our own UI/badges, ignore
+    const allOurs = mutations.every(
+      (m) =>
+        (m.target && m.target.closest?.(OUR_ROOT_SELECTOR)) ||
+        [...m.addedNodes].every(
+          (n) => n.nodeType === 1 && n.closest?.(OUR_ROOT_SELECTOR)
+        )
+    );
+    if (allOurs || PATCHING > 0) return;
+
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      PATCHING++;
+      try {
+        scanOnce(currentSettings);
+      } finally {
+        PATCHING--;
+      }
+    }, 80);
   });
+
   obs.observe(document.documentElement, {
     childList: true,
     subtree: true,
     characterData: true,
   });
-  scanOnce(settings);
+
+  PATCHING++;
+  try {
+    scanOnce(currentSettings);
+  } finally {
+    PATCHING--;
+  }
+
   return obs;
 }
 
@@ -340,14 +375,18 @@ function mountSettings(settings) {
         document.getElementById("oh-fee").value || "0"
       ),
     };
-    saveSettings(s);
+    updateSettings(s);
 
-    // Wipe old badges + host flags, then rescan with new settings
-    document.querySelectorAll(".odds-badge").forEach((el) => el.remove());
-    document
-      .querySelectorAll(`[${BADGE_ATTR}="1"]`)
-      .forEach((el) => el.removeAttribute(BADGE_ATTR));
-    scanOnce(s);
+    PATCHING++;
+    try {
+      document.querySelectorAll(".odds-badge").forEach((el) => el.remove());
+      document
+        .querySelectorAll(`[${BADGE_ATTR}="1"]`)
+        .forEach((el) => el.removeAttribute(BADGE_ATTR));
+      scanOnce(currentSettings);
+    } finally {
+      PATCHING--;
+    }
   });
 }
 
