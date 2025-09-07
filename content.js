@@ -1,4 +1,4 @@
-// === Minimal utilities =======================================================
+// === Utilities =======================================================
 
 const SETTINGS_KEY = "__prediction_odds_helper_settings__";
 const defaultSettings = {
@@ -62,10 +62,6 @@ function fmtAmerican(a) {
 }
 
 // === Detection of prices on each site =======================================
-
-// Polymarket: UI can show percentage (“55%”) or dollar price (“$0.55”).
-// Kalshi: typically shows price like $0.55 or probability as “55%” in some views.
-// We'll generically scan text nodes with % or $0.xx, and avoid duplicating badges.
 
 const BADGE_ATTR = "data-odds-badge-attached";
 
@@ -228,7 +224,6 @@ function scanOnce(settings) {
 // Observe SPA updates
 function startObservers(settings) {
   const obs = new MutationObserver((mutations) => {
-    // Throttle with microtask
     queueMicrotask(() => scanOnce(settings));
   });
   obs.observe(document.documentElement, {
@@ -236,7 +231,6 @@ function startObservers(settings) {
     subtree: true,
     characterData: true,
   });
-  // Also initial pass:
   scanOnce(settings);
   return obs;
 }
@@ -364,8 +358,3 @@ function mountSettings(settings) {
   mountSettings(settings);
   startObservers(settings);
 })();
-
-//Kalshi
-//7%×(1−P)​
-
-//Polymarket
