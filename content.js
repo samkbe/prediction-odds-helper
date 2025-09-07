@@ -123,7 +123,8 @@ function applyFeeModel(p, settings) {
   } else if (settings.feeModel === "polymarket") {
     return clamp01(p);
   } else {
-    return clamp01(p + (settings.feeAdjustmentPp || 0) / 100);
+    const fee = (settings.feeAdjustmentPp || 0) / 100;
+    return clamp01(p / (1 - fee));
   }
 }
 
@@ -334,7 +335,6 @@ function mountSettings(settings) {
   const panel = document.getElementById("odds-helper-panel");
   const feeInput = document.getElementById("oh-fee");
 
-  // Enable/disable fee input depending on radio
   const updateFeeInputEnabled = () => {
     const choice =
       document.querySelector('input[name="oh-feemodel"]:checked')?.value ||
@@ -348,7 +348,6 @@ function mountSettings(settings) {
     .getElementsByName("oh-feemodel")
     .forEach((r) => r.addEventListener("change", updateFeeInputEnabled));
 
-  // Initial state
   updateFeeInputEnabled();
 
   document
