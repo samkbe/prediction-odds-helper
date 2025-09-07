@@ -105,8 +105,6 @@ function extractProbFromText(t) {
   }
 
   // 3) Cents: "92¢" => 0.92
-  // Allow 1–3 digits (or with .decimal, just in case a site uses "92.0¢").
-  // \u00A0 = NBSP; some UIs insert that instead of a normal space.
   const mCent = s.match(/(\d{1,3}(?:\.\d+)?)[\s\u00A0]*¢/);
   if (mCent) {
     const cents = parseFloat(mCent[1]);
@@ -176,10 +174,8 @@ function attachBadge(targetNode, p, settings) {
   let badge = hostEl.querySelector?.(":scope > .odds-badge");
 
   if (badge) {
-    // Update in place (no replace)
     renderBadge(badge, p, settings);
   } else {
-    // Insert new badge right after the text node or at end of element
     badge = createBadge(p, settings);
     if (targetNode.nodeType === Node.TEXT_NODE && targetNode.parentNode) {
       targetNode.parentNode.insertBefore(badge, targetNode.nextSibling);
@@ -228,7 +224,7 @@ function scanOnce(settings) {
   }
 }
 
-let PATCHING = 0; // reentrancy guard
+let PATCHING = 0;
 
 function startObservers(settings) {
   let timer = 0;
