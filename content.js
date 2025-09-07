@@ -74,27 +74,46 @@ const BADGE_ATTR = "data-odds-badge-attached";
 function isLikelyPriceText(t) {
   if (!t) return false;
   const s = t.trim();
-  // Accept e.g. "55%"  "5.5%"  "0.55" (rare)  "$0.55"  "$0.55 YES"
-  // Also reject large percentages like “100% OFF” (still fine to show, but heuristic).
-  return (
-    /(^|\s)\d{1,3}(\.\d+)?%(\s|$)/.test(s) || /(^|\s)\$\s*0?\.\d+(\s|$)/.test(s)
-  );
+
+  // Percent: "55%" or "5.5%"
+  const pct = /(^|\s)\d{1,3}(?:\.\d+)?\s*%(\s|$)/;
+
+  // Dollar price: "$0.55" or "$ .55"
+  const usd = /(^|\s)\$\s*0?\.\d+(\s|$)/;
+
+  // Cents: "92¢"  (¢ = U+00A2). Allow optional thin/nbsp spaces before/after.
+  const cents = /(^|\s)\d{1,3}(?:\.\d+)?[\s\u00A0]*¢(\s|$)/;
+
+  return pct.test(s) || usd.test(s) || cents.test(s);
 }
 
 function extractProbFromText(t) {
   const s = t.trim();
-  // 1) Percentage case
+
+  // 1) Percentage: "55%" => 0.55
   const mPct = s.match(/(\d{1,3}(?:\.\d+)?)\s*%/);
   if (mPct) {
-    let p = parseFloat(mPct[1]) / 100;
+    const p = parseFloat(mPct[1]) / 100;
     return clamp01(p);
   }
-  // 2) Dollar price case like $0.55 => assume YES probability ~ price
+
+  // 2) Dollar price: "$0.55" => 0.55
   const mDol = s.match(/\$\s*(0?\.\d+)/);
   if (mDol) {
-    let p = parseFloat(mDol[1]);
+    const p = parseFloat(mDol[1]);
     return clamp01(p);
   }
+
+  // 3) Cents: "92¢" => 0.92
+  // Allow 1–3 digits (or with .decimal, just in case a site uses "92.0¢").
+  // \u00A0 = NBSP; some UIs insert that instead of a normal space.
+  const mCent = s.match(/(\d{1,3}(?:\.\d+)?)[\s\u00A0]*¢/);
+  if (mCent) {
+    const cents = parseFloat(mCent[1]);
+    const p = cents / 100;
+    return clamp01(p);
+  }
+
   return NaN;
 }
 
