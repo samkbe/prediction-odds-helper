@@ -9,10 +9,8 @@
       "matches": [
         "https://*.polymarket.com/*",
         "https://*.kalshi.com/*",
-        "https://*.myriad.markets/*",
         "https://kalshi.com/*",
-        "https://polymarket.com/*",
-        "https://myriad.markets/*"
+        "https://polymarket.com/*"
       ],
       "js": ["content.js"],
       "css": ["style.css"],
@@ -22,9 +20,7 @@
   "host_permissions": [
     "https://*.polymarket.com/*",
     "https://*.kalshi.com/*",
-    "https://*.myriad.markets/*",
     "https://kalshi.com/*",
-    "https://polymarket.com/*",
-    "https://myriad.markets/*"
+    "https://polymarket.com/*"
   ]
 }
