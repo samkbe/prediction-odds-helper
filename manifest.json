@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prediction Market to Sports Odds Converter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Append sportsbook-style odds next to prediction market prices (Decimal, American, Fractional) with optional fee adjustment.",
   "icons": {
     "16": "icons/icon16.png",
