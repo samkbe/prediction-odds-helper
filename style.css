@@ -83,3 +83,14 @@
   display: block;
   margin: 4px 0;
 }
+
+.oh-fieldset label {
+  display: block;
+  margin: 4px 0;
+}
+
+.oh-btn-danger {
+  background: rgba(220, 38, 38, 0.1) !important;
+  border-color: rgba(220, 38, 38, 0.3) !important;
+  color: #dc2626 !important;
+}

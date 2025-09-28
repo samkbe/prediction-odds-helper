@@ -7,6 +7,7 @@ const defaultSettings = {
   showFractional: false,
   feeModel: false, // false | "kalshi" | "polymarket"
   feeAdjustmentPp: 0,
+  disabled: false,
 };
 
 let currentSettings = loadSettings();
@@ -146,11 +147,11 @@ function renderBadge(el, p, settings) {
 
   const bits = [];
   if (settings.showDecimal)
-    bits.push(`Dec ${fmtDecimal(probToDecimal(effectiveP))}`);
+    bits.push(`${fmtDecimal(probToDecimal(effectiveP))}`);
   if (settings.showAmerican)
-    bits.push(`US ${fmtAmerican(probToAmerican(effectiveP))}`);
+    bits.push(`${fmtAmerican(probToAmerican(effectiveP))}`);
   if (settings.showFractional)
-    bits.push(`Frac ${probToFractional(effectiveP)}`);
+    bits.push(`${probToFractional(effectiveP)}`);
   el.textContent = ` ${bits.join(" · ")}`;
 }
 
@@ -188,6 +189,8 @@ function attachBadge(targetNode, p, settings) {
 
 // Walk nodes and find likely price texts
 function scanOnce(settings) {
+  if (settings.disabled) return;
+
   const walker = document.createTreeWalker(
     document.body,
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
@@ -231,6 +234,7 @@ function startObservers(settings) {
 
   const obs = new MutationObserver((mutations) => {
     // If all mutations are within our own UI/badges, ignore
+    if (settings.disabled) return;
     const allOurs = mutations.every(
       (m) =>
         (m.target && m.target.closest?.(OUR_ROOT_SELECTOR)) ||
@@ -317,6 +321,7 @@ function mountSettings(settings) {
 
       <div class="oh-row">
         <button id="oh-apply" class="oh-btn">Apply</button>
+        <button id="oh-remove-all" class="oh-btn oh-btn-danger">Remove</button>
         <button id="oh-close" class="oh-btn">Close</button>
       </div>
       <div class="oh-hint">
@@ -326,6 +331,7 @@ function mountSettings(settings) {
       </div>
     </div>
   `;
+  
   document.body.appendChild(wrap);
 
   const panel = document.getElementById("odds-helper-panel");
@@ -369,6 +375,7 @@ function mountSettings(settings) {
       feeAdjustmentPp: parseFloat(
         document.getElementById("oh-fee").value || "0"
       ),
+      disabled: false,
     };
     updateSettings(s);
 
@@ -382,6 +389,21 @@ function mountSettings(settings) {
     } finally {
       PATCHING--;
     }
+  });
+
+  document.getElementById("oh-remove-all").addEventListener("click", () => {
+    PATCHING++;
+    try {
+    document.querySelectorAll(".odds-badge").forEach((el) => el.remove());
+    document
+      .querySelectorAll(`[${BADGE_ATTR}="1"]`)
+      .forEach((el) => el.removeAttribute(BADGE_ATTR));
+      const s = { ...currentSettings, disabled: true };
+      updateSettings(s);
+    } finally {
+      PATCHING--;
+    }
+    panel.hidden = true;
   });
 }
 
