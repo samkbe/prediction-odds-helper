@@ -127,6 +127,18 @@ function applyFeeModel(p, settings) {
   }
 }
 
+function isInExcludedRegion(el) {
+  const excludedRegions = [
+    'nav', 'header', 'footer'
+  ]
+
+  for (const selector of excludedRegions) {
+    if (el.closest(selector)) return true;
+  }
+
+  return false;
+}
+
 // === Badge creation ==========================================================
 
 const BADGE_ATTR = "data-odds-badge-attached";
@@ -203,6 +215,9 @@ function scanOnce(settings) {
     // Skip anything inside our badges/settings UI
     const parentEl = n.nodeType === Node.TEXT_NODE ? n.parentElement : n;
     if (parentEl && parentEl.closest(OUR_ROOT_SELECTOR)) continue;
+
+    // Skip any non-target elements
+    if (parentEl && isInExcludedRegion(parentEl)) continue;
 
     if (n.nodeType === Node.TEXT_NODE) {
       const t = n.nodeValue;
